@@ -2,39 +2,56 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 )
 
-type Person struct {
-	Name string
-	Age  int
+type ShortenRequest struct {
+	Url string
 }
 
-func hello(w http.ResponseWriter, req *http.Request) {
-
-	fmt.Fprintf(w, "hello go\n")
+type ShortenResponse struct {
+	ShortURL string `json:"short_url"`
 }
 
-func PersonCreate(w http.ResponseWriter, r *http.Request) {
-	var p Person
+func ShortenURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	err := json.NewDecoder(r.Body).Decode(&p)
+	var req ShortenRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	key := generateCode()
+	urlStore[key] = req.Url
+	json.NewEncoder(w).Encode(ShortenResponse{
+		ShortURL: "http://localhost:8080/" + key,
+	})
 
-	fmt.Fprintf(w, "Person:%+v", p)
+}
+
+func RedirectURL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	reqU := r.URL.Path
+	prefix := reqU[1:]
+	resp, ok := urlStore[prefix]
+	if !ok {
+		http.Error(w, "url not found", http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, resp, http.StatusFound)
 
 }
 
 func main() {
-	http.HandleFunc("/hello", hello)
-	http.HandleFunc("/person", PersonCreate)
+	http.HandleFunc("/url", ShortenURL)
+	http.HandleFunc("/", RedirectURL)
+
 	http.ListenAndServe(":8080", nil)
+
 }
