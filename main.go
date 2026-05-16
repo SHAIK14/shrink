@@ -41,6 +41,7 @@ func RedirectURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	initDB()
 	http.HandleFunc("POST /url", ShortenURL)
 	http.HandleFunc("GET /", RedirectURL)
 
