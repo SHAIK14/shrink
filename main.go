@@ -6,10 +6,7 @@ import (
 )
 
 func ShortenURL(w http.ResponseWriter, r *http.Request) {
-	// if r.Method != http.MethodPost {
-	// 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	// 	return
-	// }
+
 	var req ShortenRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -17,7 +14,19 @@ func ShortenURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := generateCode()
-	urlStore[key] = req.Url
+
+	_, err = db.Exec(`
+		INSERT INTO urls(
+		short_code, original_url
+		)
+		values(
+		?,?
+		)
+		`, key, req.Url)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	json.NewEncoder(w).Encode(ShortenResponse{
 		ShortURL: "http://localhost:8080/" + key,
 	})
@@ -25,18 +34,22 @@ func ShortenURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func RedirectURL(w http.ResponseWriter, r *http.Request) {
-	// if r.Method != http.MethodGet {
-	// 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	// 	return
-	// }
+
 	reqU := r.URL.Path
 	prefix := reqU[1:]
-	resp, ok := urlStore[prefix]
-	if !ok {
+
+	row := db.QueryRow(`
+		SELECT original_url FROM urls
+		WHERE short_code = ?
+		`, prefix)
+	var originalURL string
+	err := row.Scan(&originalURL)
+	if err != nil {
 		http.Error(w, "url not found", http.StatusNotFound)
 		return
 	}
-	http.Redirect(w, r, resp, http.StatusFound)
+
+	http.Redirect(w, r, originalURL, http.StatusFound)
 
 }
 
